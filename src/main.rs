@@ -1,4 +1,4 @@
-use aws_sdk_cognitoidentityprovider as provider;
+use serde::{Deserialize, Serialize};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -9,52 +9,46 @@ async fn main() -> anyhow::Result<()> {
     tracing::debug!("debug message");
     tracing::trace!("trace message");
 
-    use cognito_secret_hash::get_auth_info_from_env;
+    dotenv::dotenv().ok();
 
-    let config = aws_config::load_from_env().await;
-    let client = provider::Client::new(&config);
+    let secrets_manager_id = std::env::var("SECRETS_MANAGER_ID")?;
+    let username = std::env::var("COGNITO_USERNAME")?;
+    let password = std::env::var("COGNITO_PASSWORD")?;
+    let api_gateway_url = std::env::var("API_GATEWAY_URL")?;
 
-    let (secret_key, client_id, user_pool_id) = get_auth_info_from_env().await?;
-
-    let username = "add5a600-b08c-49fb-ad20-693fd0194eda";
-    // let username = "a.kano1101@gmail.com"; これはダメ
-    let password = "braQfuqVWtMCNcP6k-2o".to_string();
-
-    let srp_client = cognito_srp::SrpClient::new(
+    let id_token = cognito_env::get_token_cache_or_auth(
+        "ap-northeast-1",
+        &secrets_manager_id,
+        &[
+            "COGNITO_CLIENT_SECRET",
+            "COGNITO_CLIENT_ID",
+            "COGNITO_USER_POOL_ID",
+        ],
         &username,
         &password,
-        &user_pool_id,
-        &client_id,
-        Some(&secret_key),
-    );
+    )
+    .await?
+    .0
+    .as_str();
 
-    let initiate_auth_response = client
-        .initiate_auth()
-        .auth_flow(provider::types::AuthFlowType::UserSrpAuth)
-        .client_id(client_id.clone())
-        .set_auth_parameters(Some(srp_client.get_auth_params().unwrap()))
+    let reqwest_client = reqwest::Client::new();
+
+    let lambda_url = api_gateway_url;
+    let response = reqwest_client
+        .post(lambda_url)
+        .header("Authorization", format!("Bearer {}", id_token))
         .send()
         .await?;
 
-    let challenge_params = initiate_auth_response
-        .challenge_parameters
-        .ok_or(anyhow::anyhow!("failed to get challenge parameters"))?;
+    let body = response.json::<User>().await?;
 
-    let challenge_responses = srp_client.process_challenge(challenge_params)?;
-
-    use aws_sdk_cognitoidentityprovider::types::ChallengeNameType;
-    let respond = client
-        .respond_to_auth_challenge()
-        .client_id(client_id)
-        .challenge_name(ChallengeNameType::PasswordVerifier)
-        .set_challenge_responses(Some(challenge_responses))
-        .send()
-        .await?;
-
-    let authentication_result = respond.authentication_result.unwrap();
-    let id_token = authentication_result.id_token.unwrap();
-
-    tracing::warn!("id_token: {}", id_token);
+    tracing::warn!("{:?}", body);
 
     Ok(())
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct User {
+    pub id: String,
+    pub username: String,
 }

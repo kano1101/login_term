@@ -7,14 +7,11 @@ edition = "2021"
 anyhow = "1.0.71"
 aws-config = "0.55.2"
 aws-sdk-cognitoidentityprovider = "0.27.0"
-aws_get_secret_value = { git = "https://github.com/kano1101/aws_get_secret_value.git" }
-cognito_secret_hash = { path = "../../rust/cognito_secret_hash" }
-cognito_srp = "0.1.2"
-env_logger = "0.10.0"
-reqwest = { version = "0.11.17", default-features = false, features = ["json"] }
+cognito_env = { git = "https://github.com/kano1101/cognito_env.git" }
+dotenv = "0.15.0"
+# native-tls = { version = "0.2.11", features = ["vendored"] }
+reqwest = { version = "0.11.17", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-srp = { path = "../../aws/srp" }
-tokio = { version = "1.28.0", features = ["macros"] }
+tokio = { version = "1.28.0", features = ["full"] }
 tracing = { version = "0.1.37", features = ["log"] }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["fmt"] }
